@@ -29,7 +29,7 @@ func Installer(cmd *cobra.Command, args []string) error {
 
 	cmd.Println("Fetching module information...")
 	if err := newModule.FetchModuleInfo(name); err == nil {
-		cmd.Println("Installing module:", name)
+		cmd.Println("Installing module:", newModule.Name)
 		if err := newModule.InstallModule(cmd.Context()); err != nil {
 			return err
 		}
@@ -39,6 +39,7 @@ func Installer(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	cmd.Println("Module is installer successfully:", name)
+	cmd.Println("Module is installer successfully:", newModule.Name)
+	cmd.Printf("Show report using: %s report %s\n", cmd.Root().Name(), newModule.Name)
 	return nil
 }

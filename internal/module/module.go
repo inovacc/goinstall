@@ -71,6 +71,8 @@ func (m *Module) FetchModuleInfo(module string) error {
 		_ = m.fs.RemoveAll(tmpDir)
 	}(m.fs, tmpDir)
 
+	module = m.normalizeModulePath(module)
+
 	ctx, cancel := context.WithTimeout(m.ctx, m.getTimeout())
 	defer cancel()
 
@@ -346,4 +348,31 @@ func (m *Module) pickVersion(preferred string, versions []string) string {
 		return preferred
 	}
 	return ""
+}
+
+func (m *Module) normalizeModulePath(input string) string {
+	// Strip known prefixes
+	prefixes := []string{
+		"https://", "http://", "git://", "ssh://", "git@", "ssh@", "www.",
+	}
+	for _, p := range prefixes {
+		if strings.HasPrefix(input, p) {
+			input = strings.TrimPrefix(input, p)
+			break
+		}
+	}
+
+	// Handle ssh-style git@github.com:user/repo.git
+	if strings.Contains(input, ":") && strings.Contains(input, "@") {
+		parts := strings.SplitN(input, ":", 2)
+		if len(parts) == 2 {
+			input = strings.ReplaceAll(parts[1], "\\", "/")
+		}
+	}
+
+	// Trim trailing `.git`
+	input = strings.ReplaceAll(input, ".git", "")
+
+	// Final path cleanup
+	return strings.Trim(input, "/")
 }
