@@ -1,6 +1,7 @@
 # Golang Installer
 
 [ ] golang install cli and autoupdate:
+
 * check pid of installed app for update if needed
 
 this app is a `goinstall` app that is a wrapper around `go install` plus `sqlite` database to handle all modules
@@ -63,18 +64,18 @@ return nil
 CREATE TABLE IF NOT EXISTS modules
 (
     id
-    INTEGER
-    PRIMARY
-    KEY,
+        INTEGER
+        PRIMARY
+            KEY,
     path
-    TEXT
-    UNIQUE,
+        TEXT
+        UNIQUE,
     version
-    TEXT,
+        TEXT,
     installed_at
-    DATETIME,
+        DATETIME,
     pid
-    INTEGER
+        INTEGER
 );
 ```
 

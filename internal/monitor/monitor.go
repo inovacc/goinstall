@@ -18,9 +18,9 @@ func Monitor(cmd *cobra.Command, args []string) error {
 		cobra.CheckErr(db.Close())
 	}(db)
 
-	return nil
+	return moduleMonitor(db)
 }
 
-func moduleMonitor(db *database.Database) {
-
+func moduleMonitor(db *database.Database) error {
+	return nil
 }
