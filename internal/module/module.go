@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/inovacc/goinstall/internal/database"
 	"github.com/spf13/afero"
 	"golang.org/x/mod/semver"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,7 +62,7 @@ func NewModule(ctx context.Context, afs afero.Fs, goBinPath string) (*Module, er
 	}, nil
 }
 
-func (m *Module) FetchData(module string) error {
+func (m *Module) FetchModuleInfo(module string) error {
 	tmpDir, err := afero.TempDir(m.fs, "", "go-list")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
@@ -130,6 +134,65 @@ func (m *Module) SaveToFile(path string) error {
 	return afero.WriteFile(m.fs, path, data, 0644)
 }
 
+func (m *Module) Report(db *database.Database) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Println("rollback failed:", err)
+			}
+		}
+	}()
+
+	// Serialize versions and dependencies to JSON
+	versionsJSON, err := json.Marshal(m.Versions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal versions: %w", err)
+	}
+
+	depsJSON, err := json.Marshal(m.Dependencies)
+	if err != nil {
+		return fmt.Errorf("failed to marshal dependencies: %w", err)
+	}
+
+	query := `
+		INSERT INTO modules (name, version, versions, dependencies, hash, time)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(name, version) DO UPDATE
+		SET hash = excluded.hash,
+			time = excluded.time,
+			versions = excluded.versions,
+			dependencies = excluded.dependencies
+		`
+	if _, err := tx.Exec(query, m.Name, m.Version, versionsJSON, depsJSON, m.Hash, m.Time); err != nil {
+		return fmt.Errorf("failed to insert module: %w", err)
+	}
+
+	depStmt := `
+		INSERT INTO dependencies (module_name, dep_name, dep_version, dep_hash)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(module_name, dep_name) DO UPDATE
+		SET dep_version = excluded.dep_version,
+			dep_hash = excluded.dep_hash
+		`
+
+	for _, d := range m.Dependencies {
+		if _, err := tx.Exec(depStmt, m.Name, d.Name, d.Version, d.Hash); err != nil {
+			return fmt.Errorf("failed to insert dependency: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
 func LoadModuleFromFile(fs afero.Fs, path string) (*Module, error) {
 	data, err := afero.ReadFile(fs, path)
 	if err != nil {
@@ -171,24 +234,41 @@ func (m *Module) dependency(module string) (*Dependency, error) {
 }
 
 func (m *Module) fetchModuleVersions(ctx context.Context, dir, module string) (*ListResp, error) {
-	cmd := exec.CommandContext(ctx, m.goBinPath, "list", "-m", "-versions", "-json", fmt.Sprintf("%s@latest", module))
-	cmd.Dir = dir
+	original := module
+	attempts := 0
+	const maxAttempts = 5
 
-	var lr ListResp
-	var out bytes.Buffer
-	cmd.Stdout = &out
+	for {
+		cmd := exec.CommandContext(ctx, m.goBinPath, "list", "-m", "-versions", "-json", fmt.Sprintf("%s@latest", module))
+		cmd.Dir = dir
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("go list failed for module %q: %w", module, err)
+		var lr ListResp
+		var out bytes.Buffer
+		cmd.Stdout = &out
+
+		if err := cmd.Run(); err == nil {
+			if err := json.NewDecoder(&out).Decode(&lr); err != nil {
+				return nil, fmt.Errorf("decoding list response failed: %w", err)
+			}
+
+			if len(lr.Versions) > 0 {
+				sort.Slice(lr.Versions, func(i, j int) bool {
+					return semver.Compare(lr.Versions[i], lr.Versions[j]) > 0
+				})
+				return &lr, nil
+			}
+		}
+
+		// Step back one path segment
+		lastSlash := strings.LastIndex(module, "/")
+		if lastSlash == -1 || attempts >= maxAttempts {
+			break
+		}
+		module = module[:lastSlash]
+		attempts++
 	}
-	if err := json.NewDecoder(&out).Decode(&lr); err != nil {
-		return nil, fmt.Errorf("decoding list response failed: %w", err)
-	}
 
-	sort.Slice(lr.Versions, func(i, j int) bool {
-		return semver.Compare(lr.Versions[i], lr.Versions[j]) > 0
-	})
-	return &lr, nil
+	return nil, fmt.Errorf("failed to resolve module versions for %q (initially %q)", module, original)
 }
 
 func (m *Module) setupTempModule(ctx context.Context, dir string) error {
@@ -259,11 +339,11 @@ func (m *Module) hashModule(input string) string {
 }
 
 func (m *Module) pickVersion(preferred string, versions []string) string {
-	if preferred != "" {
-		return preferred
-	}
 	if len(versions) > 0 {
 		return versions[0]
+	}
+	if preferred != "" {
+		return preferred
 	}
 	return ""
 }

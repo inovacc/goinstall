@@ -12,7 +12,7 @@ func TestModule_Check(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := mod.FetchData("github.com/spf13/afero"); err != nil {
+	if err := mod.FetchModuleInfo("github.com/spf13/afero"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -27,7 +27,7 @@ func TestModule_Check_Latest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := mod.FetchData("github.com/spf13/afero@latest"); err != nil {
+	if err := mod.FetchModuleInfo("github.com/spf13/afero@latest"); err != nil {
 		t.Fatal(err)
 	}
 

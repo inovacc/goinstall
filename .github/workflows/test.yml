@@ -1,0 +1,15 @@
+name: Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  quality-check:
+    uses: inovacc/workflows/.github/workflows/reusable-go-check.yml@v1
+    with:
+      run-tests: true
+      run-lint: true
+      run-vulncheck: true

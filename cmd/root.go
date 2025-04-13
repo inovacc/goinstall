@@ -17,43 +17,72 @@ limitations under the License.
 package cmd
 
 import (
-	"os"
-
+	"fmt"
+	"github.com/inovacc/goinstall/internal/installer"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"os"
+	"path/filepath"
+	"runtime"
 )
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "goinstall",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "Install, update or remove Go modules with ease",
+	Long: `goinstall is a CLI tool that helps manage Go module installations.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+You can use it to fetch, install, update, or remove Go packages
+from your environment with a clean and idiomatic approach.`,
+	Args: cobra.ArbitraryArgs, // <- allows module path as an argument
+	RunE: func(cmd *cobra.Command, args []string) error {
+		remove, _ := cmd.Flags().GetBool("remove")
+		update, _ := cmd.Flags().GetBool("update")
+
+		if remove && update {
+			return fmt.Errorf("flags --remove and --update cannot be used together")
+		}
+
+		if len(args) == 0 {
+			return fmt.Errorf("module name is required. Usage: goinstall [flags] <module>")
+		}
+
+		return installer.Installer(cmd, args)
+	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
-	}
+	cobra.CheckErr(rootCmd.Execute())
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.goinstall.yaml)")
+	rootCmd.Flags().BoolP("remove", "r", false, "Remove go install module")
+	rootCmd.Flags().BoolP("update", "u", false, "Update go install module")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	cobra.CheckErr(viper.BindPFlag("remove", rootCmd.Flags().Lookup("remove")))
+	cobra.CheckErr(viper.BindPFlag("update", rootCmd.Flags().Lookup("update")))
+
+	viper.Set("installPath", dbPath())
+}
+
+func dbPath() string {
+	if custom := os.Getenv("GOINSTALL_DB_PATH"); custom != "" {
+		return custom
+	}
+
+	home, _ := os.UserHomeDir()
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(home, "AppData", "Local", "goinstall", "modules.db")
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "goinstall", "modules.db")
+	default: // Linux/Unix with XDG
+		xdgData := os.Getenv("XDG_DATA_HOME")
+		if xdgData == "" {
+			xdgData = filepath.Join(home, ".local", "share")
+		}
+		return filepath.Join(xdgData, "goinstall", "modules.db")
+	}
 }

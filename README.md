@@ -1,11 +1,13 @@
 # Golang Installer
 
 [ ] golang install cli and autoupdate:
-    * check pid of installed app for update if needed
+* check pid of installed app for update if needed
 
-this app is a `goinstall` app that is a wrapper around `go install` plus `sqlite` database to handle all modules installed and eventually monitoring then for updates
+this app is a `goinstall` app that is a wrapper around `go install` plus `sqlite` database to handle all modules
+installed and eventually monitoring then for updates
 
 ## command to run install
+
 ```shell
 goinstall https://github.com/inovacc/base-utils
 goinstall git://github.com/inovacc/base-utils
@@ -17,16 +19,16 @@ goinstall github.com/inovacc/base-utils
 
 goinstall/
 ├── cmd
-│   └── root.go
+│ └── root.go
 ├── go.mod
 ├── go.sum
 ├── internal
-│   ├── db
-│   │   └── db.go
-│   ├── installer
-│   │   └── installer.go
-│   └── monitor
-│       └── monitor.go
+│ ├── db
+│ │ └── db.go
+│ ├── installer
+│ │ └── installer.go
+│ └── monitor
+│ └── monitor.go
 ├── LICENSE
 ├── main.go
 └── README.md
@@ -35,22 +37,22 @@ goinstall/
 
 ````go
 var rootCmd = &cobra.Command{
-    Use:   "goinstall <module-path>",
-    Short: "Install and manage Go binaries with tracking",
-    RunE: func(cmd *cobra.Command, args []string) error {
-        return installer.InstallModule(args[0])
-    },
+Use:   "goinstall <module-path>",
+Short: "Install and manage Go binaries with tracking",
+RunE: func (cmd *cobra.Command, args []string) error {
+return installer.InstallModule(args[0])
+},
 }
 
 // install/installer.go
 func InstallModule(module string) error {
-    cmd := exec.Command("go", "install", fmt.Sprintf("%s@latest", module))
-    cmd.Env = append(os.Environ(), "GOBIN="+yourBinDir)
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("install failed: %w", err)
-    }
-    // Save to SQLite DB here
-    return nil
+cmd := exec.Command("go", "install", fmt.Sprintf("%s@latest", module))
+cmd.Env = append(os.Environ(), "GOBIN="+yourBinDir)
+if err := cmd.Run(); err != nil {
+return fmt.Errorf("install failed: %w", err)
+}
+// Save to SQLite DB here
+return nil
 }
 
 ````
@@ -58,12 +60,21 @@ func InstallModule(module string) error {
 ## database schema
 
 ```sql
-CREATE TABLE IF NOT EXISTS modules (
-    id INTEGER PRIMARY KEY,
-    path TEXT UNIQUE,
-    version TEXT,
-    installed_at DATETIME,
-    pid INTEGER
+CREATE TABLE IF NOT EXISTS modules
+(
+    id
+    INTEGER
+    PRIMARY
+    KEY,
+    path
+    TEXT
+    UNIQUE,
+    version
+    TEXT,
+    installed_at
+    DATETIME,
+    pid
+    INTEGER
 );
 ```
 
@@ -127,7 +138,7 @@ func installModule(module string) error {
 
 	fmt.Println("Installing", module)
 	cmd := exec.Command("go", "install", module+"@latest")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s",filepath.Join(os.Getenv("HOME"), "go"), "bin"))
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s", filepath.Join(os.Getenv("HOME"), "go"), "bin"))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
