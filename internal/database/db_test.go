@@ -11,6 +11,9 @@ import (
 func TestNewDatabase(t *testing.T) {
 	afs := afero.NewOsFs()
 	tmpDir, err := afero.TempDir(afs, "", "database")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	viper.Set("installPath", filepath.Join(tmpDir, "modules.db"))
 
